@@ -89,4 +89,15 @@ obj-$(CONFIG_MACH_M0_CTC)   += cw_tty.o
 # Secure OS Mobicore Interface
 CFLAGS_tzic.o :=$(call as-instr,.arch_extension sec,-DREQUIRES_SEC=1)
 obj-$(CONFIG_MOBICORE_SUPPORT)  += tzic.o
+<<<<<<< HEAD
 obj-$(CONFIG_UID_CPUTIME) += uid_cputime.o
+=======
+obj-$(CONFIG_MOBICORE_DRIVER)  += tzic.o
+
+ifeq ($(TIMA_ENABLED),1)
+obj-$(CONFIG_TIMA_LOG)		+= tima_debug_log.o
+endif
+
+# Touchwake
+obj-$(CONFIG_TOUCH_WAKE)        += touch_wake.o
+>>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
