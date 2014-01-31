@@ -99,5 +99,9 @@ obj-$(CONFIG_TIMA_LOG)		+= tima_debug_log.o
 endif
 
 # Touchwake
+<<<<<<< HEAD
+obj-$(CONFIG_TOUCH_WAKE)        += touch_wake.o
+>>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
+=======
 obj-$(CONFIG_TOUCH_WAKE)        += touch_wake.o
 >>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a

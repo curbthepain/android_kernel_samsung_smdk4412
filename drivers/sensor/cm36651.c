@@ -767,8 +767,11 @@ irqreturn_t cm36651_irq_thread_fn(int irq, void *data)
 	input_report_abs(cm36651->proximity_input_dev, ABS_DISTANCE, val);
 	input_sync(cm36651->proximity_input_dev);
 <<<<<<< HEAD
+<<<<<<< HEAD
 	__pm_wakeup_event(&cm36651->prx_wake_lock, 3 * HZ);
 =======
+=======
+>>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
 
 // Yank555.lu : this is where we will know is something changes in proximity detection
 #ifdef CONFIG_TOUCH_WAKE

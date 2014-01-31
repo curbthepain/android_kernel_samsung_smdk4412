@@ -4067,6 +4067,9 @@ void touchscreen_enable(void)
 EXPORT_SYMBOL(touchscreen_enable);
 #endif
 
+<<<<<<< HEAD
+>>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
+=======
 >>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
 static int __devinit mms_ts_probe(struct i2c_client *client,
 				  const struct i2c_device_id *id)

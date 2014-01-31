@@ -63,6 +63,9 @@
 #include <linux/touch_wake.h>
 #endif
 
+<<<<<<< HEAD
+>>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
+=======
 >>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
 #define MAX_FINGERS		10
 #define MAX_WIDTH		30
@@ -3182,6 +3185,12 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 		pr_err("[TOUCHWAKE] Failed to set touchwake_data\n");
 #endif
 
+#ifdef CONFIG_TOUCH_WAKE
+	touchwake_data = info;
+	if (touchwake_data == NULL)
+		pr_err("[TOUCHWAKE] Failed to set touchwake_data\n");
+#endif
+
 	sec_touchscreen = device_create(sec_class,
 					NULL, 0, info, "sec_touchscreen");
 	if (IS_ERR(sec_touchscreen)) {
@@ -3238,6 +3247,7 @@ static int __devexit mms_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 //#ifndef CONFIG_HAS_EARLYSUSPEND
 static int mms_ts_suspend(struct device *dev)
@@ -3344,6 +3354,8 @@ static int fb_notifier_callback(struct notifier_block *self,
 
 #if defined(CONFIG_PM) && !defined(CONFIG_FB)
 =======
+=======
+>>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
 #if defined(CONFIG_PM) && !defined(CONFIG_HAS_EARLYSUSPEND)
 >>>>>>> de8f9575f48... smdk4412: TouchWake 1.1a
 static const struct dev_pm_ops mms_ts_pm_ops = {

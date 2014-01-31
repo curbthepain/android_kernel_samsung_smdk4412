@@ -31,6 +31,10 @@
 #include <linux/touch_wake.h>
 #endif
 
+#ifdef CONFIG_TOUCH_WAKE
+#include <linux/touch_wake.h>
+#endif
+
 extern struct class *sec_class;
 
 struct gpio_button_data {
