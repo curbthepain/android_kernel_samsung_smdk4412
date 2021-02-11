@@ -21,11 +21,6 @@
 #include <mach/map.h>
 #include <plat/cpu.h>
 
-#ifdef CONFIG_GPU_CLOCK_CONTROL
-typedef unsigned long mali_bool;
-mali_bool mali_dvfs_table_update(void);
-#endif
-
 /* ASV function for Fused Chip */
 #define IDS_ARM_OFFSET		24
 #define IDS_ARM_MASK		0xFF
@@ -67,25 +62,8 @@ struct asv_judge_table exynos4x12_limit[] = {
 };
 
 struct asv_judge_table exynos4x12_limit_rev2[] = {
-#if 0
-	/* 0705 dvfs table */
 	/* HPM, IDS */
-	{  0,   0},		/* Reserved Group */
-	{ 15,   8},		/* ASV1 Group */
-	{ 16,  11},
-	{ 18,  14},
-	{ 19,  18},
-	{ 20,  22},
-	{ 21,  26},
-	{ 22,  29},
-	{ 23,  36},
-	{ 24,  44},
-	{ 25,  56},
-	{999, 999},		/* ASV11 Group */
-#else
-	/* 0725 dvfs table */
-	/* HPM, IDS */
-	{  0,   0},		/* Reserved Group */
+	{  0,   3},		/* Reserved Group */
 	{ 15,   8},		/* ASV1 Group */
 	{ 16,  11},
 	{ 18,  14},
@@ -98,7 +76,6 @@ struct asv_judge_table exynos4x12_limit_rev2[] = {
 	{ 25,  45},
 	{ 26,  50},
 	{999, 999},		/* ASV11 Group */
-#endif
 };
 
 struct asv_judge_table exynos4212_limit[] = {
@@ -230,8 +207,10 @@ static int exynos4x12_asv_store_result(struct samsung_asv *asv_info)
 	 * If ASV result value is lower than default value
 	 * Fix with default value.
 	 */
-	if (exynos_result_of_asv < DEFAULT_ASV_GROUP)
-		exynos_result_of_asv = DEFAULT_ASV_GROUP;
+	if (samsung_rev() < EXYNOS4412_REV_2_0) {
+		if (exynos_result_of_asv < DEFAULT_ASV_GROUP)
+			exynos_result_of_asv = DEFAULT_ASV_GROUP;
+	}
 
 #ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
 	pr_info("EXYNOS4X12(NO SG): IDS : %d HPM : %d RESULT : %d\n",
@@ -239,10 +218,6 @@ static int exynos4x12_asv_store_result(struct samsung_asv *asv_info)
 #endif
 
 	exynos4x12_pre_set_abb();
-
-#ifdef CONFIG_GPU_CLOCK_CONTROL
-	mali_dvfs_table_update();
-#endif
 
 	return 0;
 }
@@ -314,13 +289,25 @@ int exynos4x12_asv_init(struct samsung_asv *asv_info)
 		pr_info("EXYNOS4X12(SG):  ORIG : %d MOD : %d RESULT : %d\n",
 			exynos_orig_sp, exynos_mod_sp, exynos_result_of_asv);
 
+		/*
+		 * If fused speed group is 1 and ids value is lower than 3,
+		 * voltage value should be set to asv 0 group.
+		 */
+		if (samsung_rev() >= EXYNOS4412_REV_2_0) {
+			if (exynos_result_of_asv == 1) {
+				exynos4x12_get_ids(asv_info);
+				if ((asv_info->ids_result <= exynos4x12_limit_rev2[0].ids_limit))
+					exynos_result_of_asv = 0;
+			}
+		}
+
 		/* set Special flag into exynos_special_flag */
 		exynos_special_flag = (tmp >> LOCKING_OFFSET) & LOCKING_MASK;
 
 		exynos4x12_pre_set_abb();
 
-#ifdef CONFIG_GPU_CLOCK_CONTROL
-		mali_dvfs_table_update();
+#ifdef CONFIG_ABB_CONTROL
+		abb_control_init();
 #endif
 
 		return -EEXIST;

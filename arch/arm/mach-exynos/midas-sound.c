@@ -50,12 +50,6 @@
 #include <linux/i2c/si47xx_common.h>
 #endif
 
-#ifdef CONFIG_EXYNOS_SOUND_PLATFORM_DATA
-#include <linux/exynos_audio.h>
-#endif
-#ifdef CONFIG_USE_ADC_DET
-#include <linux/sec_jack.h>
-#endif
 
 #ifdef CONFIG_AUDIENCE_ES305
 #include <linux/i2c/es305.h>
@@ -84,56 +78,6 @@ struct si47xx_info {
 #define I2C_NUM_CODEC	4
 #define SET_PLATDATA_2MIC(i2c_pd)	s3c_i2c6_set_platdata(i2c_pd)
 #define SET_PLATDATA_CODEC(i2c_pd)	s3c_i2c4_set_platdata(i2c_pd)
-#endif
-
-#ifdef CONFIG_USE_ADC_DET
-static struct jack_zone midas_jack_zones[] = {
-	{
-		/* adc == 0, unstable zone, default to 3pole if it stays
-		 * in this range for 100ms (10ms delays, 10 samples)
-		 */
-		.adc_high = 0,
-		.delay_ms = 10,
-		.check_count = 10,
-		.jack_type = SEC_HEADSET_3POLE,
-	},
-	{
-		/* 0 < adc <= 1200, unstable zone, default to 3pole if it stays
-		 * in this range for 100ms (10ms delays, 10 samples)
-		 */
-		.adc_high = 1200,
-		.delay_ms = 10,
-		.check_count = 10,
-		.jack_type = SEC_HEADSET_3POLE,
-	},
-	{
-		/* 1200 < adc <= 2600, unstable zone, default to 4pole if it
-		 * stays in this range for 100ms (10ms delays, 10 samples)
-		 */
-		.adc_high = 2600,
-		.delay_ms = 10,
-		.check_count = 10,
-		.jack_type = SEC_HEADSET_4POLE,
-	},
-	{
-		/* 2600 < adc <= 3800, 4 pole zone, default to 4pole if it
-		 * stays in this range for 50ms (10ms delays, 5 samples)
-		 */
-		.adc_high = 3800,
-		.delay_ms = 10,
-		.check_count = 5,
-		.jack_type = SEC_HEADSET_4POLE,
-	},
-	{
-		/* adc > 3800, unstable zone, default to 3pole if it stays
-		 * in this range for two seconds (10ms delays, 200 samples)
-		 */
-		.adc_high = 0x7fffffff,
-		.delay_ms = 10,
-		.check_count = 200,
-		.jack_type = SEC_HEADSET_3POLE,
-	},
-};
 #endif
 
 static DEFINE_SPINLOCK(midas_snd_spinlock);
@@ -243,6 +187,16 @@ static struct regulator_init_data wm1811_ldo2_initdata = {
 };
 
 static struct wm8994_drc_cfg drc_value[] = {
+#if defined(CONFIG_MACH_GC1)
+	{
+		.name = "AIF1DAC DRC -3 dB",
+		.regs[0] = 0x009C,
+		.regs[1] = 0x0845,
+		.regs[2] = 0x0000,
+		.regs[3] = 0x0004,
+		.regs[4] = 0x0000,
+	},
+#else
 	{
 		.name = "voice call DRC",
 		.regs[0] = 0x009B,
@@ -251,7 +205,9 @@ static struct wm8994_drc_cfg drc_value[] = {
 		.regs[3] = 0x0210,
 		.regs[4] = 0x0000,
 	},
-#if defined(CONFIG_MACH_C1_KOR_LGT)
+#endif
+
+#if defined(CONFIG_MACH_C1_KOR_LGT) || defined(CONFIG_MACH_BAFFIN_KOR_LGT)
 	{
 		.name = "voice call DRC",
 		.regs[0] = 0x008c,
@@ -261,7 +217,7 @@ static struct wm8994_drc_cfg drc_value[] = {
 		.regs[4] = 0x0000,
 	},
 #endif
-#if defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_KONA)
+#if defined(CONFIG_MACH_P4NOTE)
 {
 		.name = "cam rec DRC",
 		.regs[0] = 0x019B,
@@ -309,8 +265,8 @@ static struct wm8994_pdata wm1811_pdata = {
 	.micbias = {0x22, 0x22},
 #elif defined(CONFIG_MACH_C1_USA_ATT)
 	.micbias = {0x2f, 0x29},
-#elif defined(CONFIG_MACH_KONA)
-	.micbias = {0x2f, 0x2f},
+#elif defined(CONFIG_MACH_GC1)
+	.micbias = {0x2f, 0x2b},
 #else
 	.micbias = {0x2f, 0x27},
 #endif
@@ -331,8 +287,7 @@ static struct wm8994_pdata wm1811_pdata = {
 	defined(CONFIG_MACH_C1_KOR_KT) || defined(CONFIG_MACH_C1_KOR_LGT) || \
 	defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_GC1) || \
 	defined(CONFIG_MACH_C1_USA_ATT) || defined(CONFIG_MACH_T0) || \
-	defined(CONFIG_MACH_M3) || defined(CONFIG_MACH_BAFFIN) || \
-	defined(CONFIG_MACH_KONA)
+	defined(CONFIG_MACH_M3) || defined(CONFIG_MACH_BAFFIN)
 	.lineout2fb = 0,
 #else
 	.lineout2fb = 1,
@@ -356,7 +311,7 @@ static struct fm34_platform_data fm34_we395_pdata = {
 	.gpio_bp = GPIO_FM34_BYPASS,
 	.set_mclk = midas_snd_set_mclk,
 };
-#ifdef CONFIG_MACH_C1_KOR_LGT
+#if defined(CONFIG_MACH_C1_KOR_LGT) || defined(CONFIG_MACH_BAFFIN_KOR_LGT)
 static struct fm34_platform_data fm34_we395_pdata_rev05 = {
 	.gpio_pwdn = GPIO_FM34_PWDN,
 	.gpio_rst = GPIO_FM34_RESET_05,
@@ -372,7 +327,7 @@ static struct i2c_board_info i2c_2mic[] __initdata = {
 	},
 };
 
-#if defined(CONFIG_MACH_C1_KOR_LGT)
+#if defined(CONFIG_MACH_C1_KOR_LGT) || defined(CONFIG_MACH_BAFFIN_KOR_LGT)
 static struct i2c_gpio_platform_data gpio_i2c_fm34 = {
 	.sda_pin = GPIO_FM34_SDA,
 	.scl_pin = GPIO_FM34_SCL,
@@ -390,16 +345,11 @@ struct platform_device s3c_device_fm34 = {
 	defined(CONFIG_FM_SI4705_MODULE)
 static void fmradio_power(int on)
 {
-	int err;
 #if defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_M0_CTC)
 	gpio_set_value(si47xx_data.gpio_sw, GPIO_LEVEL_HIGH);
 #endif
 	if (on) {
-		err = gpio_request(GPIO_FM_INT, "GPC1");
-		if (err) {
-			pr_err(KERN_ERR "GPIO_FM_INT GPIO set error!\n");
-			return;
-		}
+		gpio_request(GPIO_FM_INT, "GPC1");
 		gpio_direction_output(GPIO_FM_INT, 1);
 		gpio_set_value(si47xx_data.gpio_rst, GPIO_LEVEL_LOW);
 		gpio_set_value(GPIO_FM_INT, GPIO_LEVEL_LOW);
@@ -494,17 +444,8 @@ static struct i2c_board_info i2c_2mic[] __initdata = {
 };
 #endif
 
-#ifdef CONFIG_EXYNOS_SOUND_PLATFORM_DATA
-struct exynos_sound_platform_data midas_sound_pdata __initdata = {
-#ifdef CONFIG_USE_ADC_DET
-	.zones = midas_jack_zones,
-	.num_zones = ARRAY_SIZE(midas_jack_zones),
-#endif
-};
-#endif
-
 static struct platform_device *midas_sound_devices[] __initdata = {
-#if defined(CONFIG_MACH_C1_KOR_LGT)
+#if defined(CONFIG_MACH_C1_KOR_LGT) || defined(CONFIG_MACH_BAFFIN_KOR_LGT)
 #ifdef CONFIG_FM34_WE395
 	&s3c_device_fm34,
 #endif
@@ -519,25 +460,11 @@ static struct platform_device *midas_sound_devices[] __initdata = {
 void __init midas_sound_init(void)
 {
 	printk(KERN_INFO "Sound: start %s\n", __func__);
-	
-#ifdef CONFIG_USE_ADC_DET
-#if defined(CONFIG_MACH_KONA)
-		midas_sound_pdata.use_jackdet_type = 1;
-#else
-		midas_sound_pdata.use_jackdet_type = 0;
-#endif
-#endif
 
 	m0_gpio_init();
 
 	platform_add_devices(midas_sound_devices,
 		ARRAY_SIZE(midas_sound_devices));
-	
-#ifdef CONFIG_EXYNOS_SOUND_PLATFORM_DATA
-	pr_info("%s: set sound platform data for midas device\n", __func__);
-	if (exynos_sound_set_platform_data(&midas_sound_pdata))
-		pr_err("%s: failed to register sound pdata\n", __func__);
-#endif
 
 #ifdef CONFIG_ARCH_EXYNOS5
 #ifndef CONFIG_MACH_P10_LTE_00_BD
@@ -558,11 +485,14 @@ void __init midas_sound_init(void)
 		i2c_register_board_info(I2C_NUM_CODEC, i2c_wm1811,
 						ARRAY_SIZE(i2c_wm1811));
 
-#elif defined(CONFIG_MACH_KONA)
-	SET_PLATDATA_CODEC(NULL);
-	i2c_register_board_info(I2C_NUM_CODEC, i2c_wm1811,
-					ARRAY_SIZE(i2c_wm1811));
-		
+#elif defined(CONFIG_MACH_M3)
+		SET_PLATDATA_CODEC(NULL);
+		i2c_register_board_info(I2C_NUM_CODEC, i2c_wm1811,
+						ARRAY_SIZE(i2c_wm1811));
+#elif defined(CONFIG_MACH_BAFFIN)
+		SET_PLATDATA_CODEC(NULL);
+		i2c_register_board_info(I2C_NUM_CODEC, i2c_wm1811,
+						ARRAY_SIZE(i2c_wm1811));
 #else
 	if (system_rev != 3 && system_rev >= 0) {
 		SET_PLATDATA_CODEC(NULL);
@@ -578,6 +508,9 @@ void __init midas_sound_init(void)
 
 #if defined(CONFIG_MACH_C1_KOR_LGT)
 	if (system_rev > 5)
+		i2c_2mic[0].platform_data = &fm34_we395_pdata_rev05;
+#endif
+#if defined(CONFIG_MACH_BAFFIN_KOR_LGT)
 		i2c_2mic[0].platform_data = &fm34_we395_pdata_rev05;
 #endif
 
@@ -597,4 +530,3 @@ void __init midas_sound_init(void)
 #endif
 
 }
-

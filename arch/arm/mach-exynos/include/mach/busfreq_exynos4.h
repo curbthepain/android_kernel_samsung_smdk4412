@@ -14,6 +14,7 @@
 #define __ASM_ARCH_BUSFREQ_H __FILE__
 
 #include <linux/notifier.h>
+#include <linux/earlysuspend.h>
 
 #include <mach/ppmu.h>
 
@@ -26,11 +27,6 @@
 #define PRIME_DMC_MAX_THRESHOLD		30
 #define EXYNOS4412_DMC_MAX_THRESHOLD	30
 #define EXYNOS4212_DMC_MAX_THRESHOLD	30
-#if defined(CONFIG_MACH_P4NOTE) || defined(CONFIG_MACH_SP7160LTE) || defined(CONFIG_MACH_M0) || defined(CONFIG_MACH_C1) || defined(CONFIG_MACH_T0)
-#define DECODING_LOAD 5
-#else
-#define DECODING_LOAD 10
-#endif
 
 extern unsigned int up_threshold;
 extern unsigned int ppmu_threshold;
@@ -68,6 +64,7 @@ struct busfreq_data {
 	struct notifier_block exynos_request_notifier;
 	struct notifier_block exynos_cpufreq_notifier;
 	struct notifier_block exynos_busqos_notifier;
+	struct early_suspend busfreq_early_suspend_handler;
 	struct attribute_group busfreq_attr_group;
 	int (*init)	(struct device *dev, struct busfreq_data *data);
 	struct opp *(*monitor)(struct busfreq_data *data);

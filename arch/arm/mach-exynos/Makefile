@@ -29,14 +29,11 @@ AFLAGS_sleep-exynos4.o :=$(call as-instr,.arch_extension sec,-DREQUIRES_SEC=1)
 
 obj-$(CONFIG_EXYNOS5_PM)	+= pm-exynos5.o sleep-exynos5.o
 obj-$(CONFIG_CPU_FREQ)		+= cpufreq.o
-obj-$(CONFIG_EXYNOS4_CPUFREQ)  += asv.o
-ifeq ($(CONFIG_CPU_EXYNOS4210),y)
-obj-$(CONFIG_EXYNOS4_CPUFREQ)  += asv-4210.o
-obj-$(CONFIG_EXYNOS4_CPUFREQ)  += cpufreq-4210.o
-else
-obj-$(CONFIG_EXYNOS4_CPUFREQ)  += asv-4x12.o
-obj-$(CONFIG_EXYNOS4_CPUFREQ)  += cpufreq-4x12.o
-endif
+obj-$(CONFIG_EXYNOS4_CPUFREQ)	+= asv.o asv-4210.o asv-4x12.o
+obj-$(CONFIG_EXYNOS4_CPUFREQ)	+= cpufreq-4210.o cpufreq-4x12.o
+
+obj-$(CONFIG_ABB_CONTROL)	+= abb_control.o
+
 obj-$(CONFIG_EXYNOS5_CPUFREQ)	+= asv.o asv-5250.o
 obj-$(CONFIG_EXYNOS5_CPUFREQ)	+= cpufreq-5250.o
 obj-$(CONFIG_EXYNOS4_CPUIDLE)	+= cpuidle-exynos4.o idle-exynos4.o
@@ -84,9 +81,6 @@ endif
 else
 obj-$(CONFIG_MACH_U1_BD)		+= u1-gpio.o
 endif
-ifeq ($(CONFIG_MACH_U1_NA_SPR),y)
-obj-$(CONFIG_MACH_U1)			+= dev-c1-phone.o
-endif
 obj-$(CONFIG_MACH_Q1_BD)		+= q1-gpio.o board-gps-bcm475x.o
 obj-$(CONFIG_MACH_U1)			+= u1-wlan.o
 obj-$(CONFIG_MACH_PX)			+= mach-px.o sec-common.o board-gps-bcm475x.o px-switch.o
@@ -104,13 +98,6 @@ obj-$(CONFIG_MACH_SMDK4X12)		+= mach-smdk4x12.o
 ifeq ($(CONFIG_MACH_P4NOTE),y)
 obj-$(CONFIG_MACH_MIDAS)		+= mach-p4notepq.o px-switch.o p4note-jack.o
 else
-ifeq ($(CONFIG_MACH_KONA),y)
-ifeq ($(CONFIG_KONA_00_BD),y)
-obj-$(CONFIG_MACH_MIDAS)               += mach-kona.o px-switch.o board-kona-battery.o
-else
-obj-$(CONFIG_MACH_MIDAS)               += mach-kona.o
-endif
-else
 ifeq ($(CONFIG_MACH_IRON),y)
 obj-$(CONFIG_MACH_MIDAS)		+= board-grande.o grande-jack.o
 else
@@ -118,7 +105,6 @@ ifeq ($(CONFIG_MACH_GRANDE),y)
 obj-$(CONFIG_MACH_MIDAS)		+= board-grande.o grande-jack.o
 else
 obj-$(CONFIG_MACH_MIDAS)		+= mach-midas.o
-endif
 endif
 endif
 endif
@@ -141,7 +127,6 @@ obj-$(CONFIG_MACH_SMDK5250)		+= board-smdk5250-input.o
 obj-$(CONFIG_MACH_SMDK5250)		+= board-smdk5250-spi.o
 
 obj-$(CONFIG_MACH_P4NOTE)		+= p4-input.o
-obj-$(CONFIG_MACH_KONA)                 += kona-input.o
 
 ifeq ($(CONFIG_MACH_GRANDE),y)
 obj-$(CONFIG_MIDAS_COMMON)		+= sec-common.o board-gps-bcm475x.o \
@@ -159,7 +144,12 @@ ifeq ($(CONFIG_MACH_M3),y)
 obj-$(CONFIG_MIDAS_COMMON)		+= sec-common.o \
 					   midas-tsp.o board-midas-wlan.o \
 					   midas-camera.o midas-thermistor.o \
-					   midas-mhl.o midas-lcd.o midas-sound.o
+					   midas-mhl.o midas-lcd.o
+ifeq ($(CONFIG_MACH_M3_USA_TMO),y)
+obj-$(CONFIG_MIDAS_COMMON)		+= t0-sound.o
+else
+obj-$(CONFIG_MIDAS_COMMON)		+= midas-sound.o
+endif
 else
 ifeq ($(CONFIG_MACH_T0),y)
 obj-$(CONFIG_MIDAS_COMMON)		+= sec-common.o \
@@ -169,28 +159,12 @@ obj-$(CONFIG_MIDAS_COMMON)		+= sec-common.o \
 obj-$(CONFIG_SEC_MODEM)			+= board-gps-bcm475x.o
 else
 ifeq ($(CONFIG_MACH_P4NOTE),y)
-ifeq ($(CONFIG_MACH_P4NOTELTE_USA_VZW),y)
 obj-$(CONFIG_MIDAS_COMMON)		+= sec-common.o\
 					   midas-tsp.o board-midas-wlan.o \
 					   midas-camera.o midas-thermistor.o \
 					   midas-mhl.o midas-lcd.o midas-sound.o
-
+obj-$(CONFIG_SEC_MODEM)			+= board-gps-bcm475x.o
 obj-$(CONFIG_GPS_BRCM_475X)		+= board-gps-bcm475x.o
-else
-obj-$(CONFIG_MIDAS_COMMON)		+= sec-common.o\
-					   midas-tsp.o board-midas-wlan.o \
-					   midas-camera.o midas-thermistor.o \
-					   midas-mhl.o midas-lcd.o midas-sound.o
-
-obj-$(CONFIG_GPS_BRCM_475X)		+= board-gps-bcm475x.o
-endif #CONFIG_MACH_P4NOTELTE_USA_VZW
-else
-ifeq ($(CONFIG_MACH_KONA),y)
-obj-$(CONFIG_MIDAS_COMMON)              += sec-common.o\
-                                           midas-tsp.o board-midas-wlan.o \
-                                           midas-camera.o midas-thermistor.o \
-                                           midas-mhl.o midas-lcd.o midas-sound.o \
-                                           midas-wacom.o board-gps-bcm4752.o
 else
 ifeq ($(CONFIG_MACH_SLP_T0_LTE),y)
 obj-$(CONFIG_MIDAS_COMMON)		+= sec-common.o \
@@ -215,12 +189,9 @@ endif
 endif
 endif
 endif
-endif
 obj-$(CONFIG_IRON_BD)			+= board-iron-gpio.o board-grande-power.o
 obj-$(CONFIG_GRANDE_BD)			+= board-grande-gpio.o board-grande-power.o
 obj-$(CONFIG_P4NOTE_00_BD)		+= p4note-gpio.o p4note-power.o
-obj-$(CONFIG_KONA_00_BD)                += kona-gpio.o kona-power.o
-obj-$(CONFIG_KONA_01_BD)                += kona-01-gpio.o kona-01-power.o
 obj-$(CONFIG_GC1_00_BD)			+= gc1-gpio.o gc1-power.o gc1-jack.o
 obj-$(CONFIG_MACH_T0)			+= t0-gpio.o t0-power.o
 obj-$(CONFIG_MACH_BAFFIN)			+= baffin-gpio.o baffin-power.o
@@ -243,12 +214,7 @@ else
 ifeq ($(CONFIG_MACH_IRON),y)
 obj-$(CONFIG_MACH_MIDAS)		+= sec-reboot.o board-grande-sensor.o
 else
-ifeq ($(CONFIG_MACH_KONA_SENSOR), y)
-obj-$(CONFIG_MACH_MIDAS)                += sec-reboot.o
-obj-$(CONFIG_MACH_KONA_SENSOR)          += kona-sensor.o
-else
 obj-$(CONFIG_MACH_MIDAS)		+= sec-reboot.o midas-sensor.o
-endif
 endif
 endif
 obj-$(CONFIG_LEDS_LP5521)		+= midas-leds.o
@@ -349,6 +315,7 @@ obj-$(CONFIG_GPS_BCM47511)		+= bcm47511.o
 obj-$(CONFIG_GPS_BCM4752)		+= bcm4752.o
 obj-$(CONFIG_GPS_GSD4T)			+= gsd4t.o
 obj-$(CONFIG_SEC_THERMISTOR)		+= sec_thermistor.o
+obj-$(CONFIG_SEC_SUBTHERMISTOR)		+= sec_subthermistor.o
 obj-$(CONFIG_EXYNOS_SYSREG_PM)		+= sysreg.o
 
 obj-$(CONFIG_EXYNOS4_DEV_TMU)           += dev-slp-tmu.o
@@ -364,4 +331,4 @@ obj-$(CONFIG_CORESIGHT_ETM) += coresight.o coresight-etb.o coresight-tpiu.o core
 # for audio platform data driver
 obj-$(CONFIG_EXYNOS_SOUND_PLATFORM_DATA)	+= exynos_sound_platform_data.o
 
-obj-$(CONFIG_CHARGE_LEVEL) += charge_level.o
+obj-$(CONFIG_INTELLI_PLUG) += intelli_plug.o

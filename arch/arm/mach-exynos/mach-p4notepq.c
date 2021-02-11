@@ -42,11 +42,6 @@
 #ifdef CONFIG_BATTERY_SEC_PX
 #include <linux/power/sec_battery_px.h>
 #endif
-
-#ifdef CONFIG_BT_BCM4334
-#include <mach/board-bluetooth-bcm.h>
-#endif
-
 #include <linux/power_supply.h>
 #ifdef CONFIG_STMPE811_ADC
 #include <linux/stmpe811-adc.h>
@@ -199,9 +194,6 @@ static struct s3c2410_uartcfg smdk4212_uartcfgs[] __initdata = {
 		.ucon		= SMDK4212_UCON_DEFAULT,
 		.ulcon		= SMDK4212_ULCON_DEFAULT,
 		.ufcon		= SMDK4212_UFCON_DEFAULT,
-#ifdef CONFIG_BT_BCM4334
-		.wake_peer = bcm_bt_lpm_exit_lpm_locked,
-#endif
 	},
 	[1] = {
 		.hwport		= 1,
@@ -617,7 +609,7 @@ static struct s3c_mshci_platdata exynos4_mshc_pdata __initdata = {
 	.max_width		= 8,
 	.host_caps		= MMC_CAP_8_BIT_DATA | MMC_CAP_1_8V_DDR |
 				  MMC_CAP_UHS_DDR50 | MMC_CAP_CMD23,
-	.host_caps2		= MMC_CAP2_PACKED_CMD,
+	.host_caps2		= MMC_CAP2_PACKED_CMD | MMC_CAP2_POWEROFF_NOTIFY,
 #elif defined(CONFIG_EXYNOS4_MSHC_8BIT)
 	.max_width		= 8,
 	.host_caps		= MMC_CAP_8_BIT_DATA | MMC_CAP_CMD23,
@@ -662,10 +654,13 @@ static void __init smdk4212_usbgadget_init(void)
 	struct android_usb_platform_data *android_pdata =
 		s3c_device_android_usb.dev.platform_data;
 	if (android_pdata) {
-		unsigned int newluns = 2;
+		unsigned int newluns = 0;
+		unsigned int cdfs = 1;
+
 		printk(KERN_DEBUG "usb: %s: default luns=%d, new luns=%d\n",
 				__func__, android_pdata->nluns, newluns);
 		android_pdata->nluns = newluns;
+		android_pdata->cdfs_support = cdfs;
 	} else {
 		printk(KERN_DEBUG "usb: %s android_pdata is not available\n",
 				__func__);
@@ -834,6 +829,24 @@ static int sec_bat_get_charger_is_full(void)
 	else
 		return 0;
 }
+
+static int sec_bat_get_aicl_current(void)
+{
+	if (smb_callbacks && smb_callbacks->get_aicl_current)
+		return smb_callbacks->get_aicl_current();
+	else
+		return 0;
+}
+
+static int sec_bat_get_input_current(void)
+{
+	if (smb_callbacks && smb_callbacks->get_input_current)
+		return smb_callbacks->get_input_current();
+	else
+		return 0;
+
+}
+
 #endif
 
 static int check_bootmode(void)
@@ -1011,7 +1024,9 @@ static struct i2c_board_info i2c_devs21_emul[] __initdata = {
 static void irda_wake_en(bool onoff)
 {
 	gpio_direction_output(GPIO_IRDA_WAKE, onoff);
+#if 0
 	printk(KERN_ERR "%s: irda_wake_en : %d\n", __func__, onoff);
+#endif
 }
 
 static void irda_device_init(void)
@@ -1039,7 +1054,6 @@ static int vled_ic_onoff;
 
 static void irda_vdd_onoff(bool onoff)
 {
-	int ret = 0;
 	static struct regulator *vled_ic;
 
 	if (onoff) {
@@ -1073,7 +1087,6 @@ struct platform_device s3c_device_i2c22 = {
 };
 
 static struct mc96_platform_data mc96_pdata = {
-	.ir_remote_init = irda_device_init,
 	.ir_wake_en = irda_wake_en,
 	.ir_vdd_onoff = irda_vdd_onoff,
 };
@@ -1194,7 +1207,7 @@ void sec_bat_gpio_init(void)
 	pr_info("BAT : Battery GPIO initialized.\n");
 }
 
-static void  sec_charger_cb(int set_cable_type)
+static void  sec_charger_cb(int set_cable_type, int cable_sub_type)
 {
 	struct usb_gadget *gadget = platform_get_drvdata(&s3c_device_usbgadget);
 	bool cable_state_to_tsp;
@@ -1208,8 +1221,40 @@ static void  sec_charger_cb(int set_cable_type)
 		is_cable_attached = true;
 		is_usb_lpm_enter = false;
 		break;
-	case CHARGER_AC:
 	case CHARGER_DOCK:
+		switch (cable_sub_type) {
+		case ONLINE_SUB_TYPE_KBD:
+			cable_state_to_tsp = true;
+			cable_state_to_usb = false;
+			is_cable_attached = true;
+			is_usb_lpm_enter = true;
+			pr_info("%s: key dock is detected\n", __func__);
+			break;
+		case ONLINE_SUB_TYPE_UNKNOWN:
+		case ONLINE_SUB_TYPE_MHL:
+		case ONLINE_SUB_TYPE_AUDIO:
+		case ONLINE_SUB_TYPE_DESK:
+		case ONLINE_SUB_TYPE_SMART_NOTG:
+		case ONLINE_SUB_TYPE_SMART_OTG:
+		default:
+			cable_state_to_tsp = true;
+			cable_state_to_usb = false;
+			is_cable_attached = true;
+			is_usb_lpm_enter = true;
+
+			usb_path = usb_switch_get_path();
+			if (usb_path != USB_PATH_AP) {
+				usb_switch_lock();
+				usb_switch_set_path(USB_PATH_TA);
+				usb_switch_unlock();
+			} else {
+				pr_info("%s: sub cx is detected and ap path\n",
+					__func__);
+			}
+			break;
+		}
+		break;
+	case CHARGER_AC:
 	case CHARGER_MISC:
 		cable_state_to_tsp = true;
 		cable_state_to_usb = false;
@@ -1284,20 +1329,61 @@ static struct sec_battery_platform_data sec_battery_platform = {
 	.set_charging_current = sec_bat_set_charging_current,
 	.get_charging_current = sec_bat_get_charging_current,
 	.get_charger_is_full = sec_bat_get_charger_is_full,
+	.get_aicl_current = sec_bat_get_aicl_current,
+	.get_input_current = sec_bat_get_input_current,
 #endif
 	.init_charger_gpio = sec_bat_gpio_init,
 	.inform_charger_connection = sec_charger_cb,
 
 #if defined(CONFIG_TARGET_LOCALE_USA)
-	.temp_high_threshold = 50000,	/* 50c */
-	.temp_high_recovery = 42000,	/* 42c */
+#if defined(CONFIG_MACH_P4NOTELTE_USA_SPR)
+	.temp_event_threshold = 70000,		/* 62c */
+	.temp_high_threshold = 48000,		/* 45c */
+	.temp_high_recovery = 43200,		/* 42c */
 	.temp_low_recovery = 0,			/* 0c */
-	.temp_low_threshold = -5000,	/* -5c */
+	.temp_low_threshold = -5000,		/* -5c */
+
+	.temp_lpm_high_threshold = 48000,	/* 45c */
+	.temp_lpm_high_recovery = 43500,	/* 42c */
+	.temp_lpm_low_recovery = 0,		/* 0c */
+	.temp_lpm_low_threshold = -3700,	/* -5c */
+#elif defined(CONFIG_MACH_P4NOTELTE_USA_VZW)
+	.temp_event_threshold = 62000,		/* 62c */
+	.temp_high_threshold = 45000,		/* 45c */
+	.temp_high_recovery = 42000,		/* 42c */
+	.temp_low_recovery = 0,			/* 0c */
+	.temp_low_threshold = -5000,		/* -5c */
+
+	.temp_lpm_high_threshold = 45000,	/* 45c */
+	.temp_lpm_high_recovery = 42000,	/* 42c */
+	.temp_lpm_low_recovery = 0,		/* 0c */
+	.temp_lpm_low_threshold = -5000,	/* -5c */
+#else
+	.temp_event_threshold = 62000,          /* 62c */
+	.temp_high_threshold = 62000,		/* 62c */
+	.temp_high_recovery = 42000,		/* 42c */
+	.temp_low_recovery = 0,			/* 0c */
+	.temp_low_threshold = -5000,		/* -5c */
+
+	.temp_lpm_high_threshold = 62000,	/* 62c */
+	.temp_lpm_high_recovery = 42000,	/* 42c */
+	.temp_lpm_low_recovery = 0,		/* 0c */
+	.temp_lpm_low_threshold = -5000,	/* -5c */
+#endif
 #elif defined(CONFIG_TARGET_LOCALE_KOR)
+#if defined(CONFIG_MACH_P4NOTELTE_KOR_SKT) || \
+	defined(CONFIG_MACH_P4NOTELTE_KOR_KT) || \
+	defined(CONFIG_MACH_P4NOTELTE_KOR_LGT)
+	.temp_high_threshold = 63000,	/* 62c */
+	.temp_high_recovery = 43000,	/* 42c */
+	.temp_low_recovery = -1000,		/* 0c */
+	.temp_low_threshold = -4000,	/* -5c */
+#else
 	.temp_high_threshold = 61400,	/* 65c */
 	.temp_high_recovery = 43500,	/* 42c */
 	.temp_low_recovery = 0,			/* 0c */
 	.temp_low_threshold = -5000,	/* -5c */
+#endif
 #else
 	.temp_high_threshold = 50000,	/* 50c */
 	.temp_high_recovery = 42000,	/* 42c */
@@ -1306,8 +1392,9 @@ static struct sec_battery_platform_data sec_battery_platform = {
 #endif
 	.recharge_voltage = 4150,	/*4.15V */
 
-	.charge_duration = 10*60*60,	/* 10 hour */
-	.recharge_duration = 1.5*60*60,	/* 1.5 hour */
+	.charge_duration = 10 * 60 * 60,	/* 10 hour */
+	.recharge_duration = 1.5 * 60 * 60,	/* 1.5 hour */
+
 	.check_lp_charging_boot = check_bootmode,
 	.check_jig_status = check_jig_on
 };
@@ -1398,7 +1485,7 @@ void smdk_accessory_power(u8 token, bool active)
 		acc_en_token |= (1 << token);
 		enable = true;
 		gpio_direction_output(gpio_acc_en, 1);
-
+		usleep_range(2000, 2000);
 		if (0 != gpio_acc_5v) {
 			/* prevent the overcurrent */
 			while (!gpio_get_value(gpio_acc_5v)) {
@@ -1462,7 +1549,6 @@ static int noti_sec_univ_kbd_dock(unsigned int code)
 	return 0;
 }
 
-
 static void check_uart_path(bool en)
 {
 	int gpio_uart_sel;
@@ -1493,7 +1579,7 @@ static void check_uart_path(bool en)
 		gpio_direction_output(gpio_uart_sel2, 1);
 		printk(KERN_DEBUG "[Keyboard] uart_sel : 1, 1\n");
 	} else {
-		gpio_direction_output(gpio_uart_sel, 0);
+		gpio_direction_output(gpio_uart_sel, 1);
 		gpio_direction_output(gpio_uart_sel2, 0);
 		printk(KERN_DEBUG "[Keyboard] uart_sel : 0, 0\n");
 	}
@@ -1676,10 +1762,27 @@ static struct platform_device s3c_device_i2c10 = {
 };
 #endif
 
+#ifdef CONFIG_SENSORS_AK8963C
+static struct i2c_gpio_platform_data i2c10_platdata = {
+	.sda_pin	= GPIO_MSENSOR_SDA_18V,
+	.scl_pin	= GPIO_MSENSOR_SCL_18V,
+	.udelay	= 2, /* 250KHz */
+	.sda_is_open_drain	= 0,
+	.scl_is_open_drain	= 0,
+	.scl_is_output_only = 0,
+};
+
+static struct platform_device s3c_device_i2c10 = {
+	.name	= "i2c-gpio",
+	.id	= 10,
+	.dev.platform_data	= &i2c10_platdata,
+};
+#endif
+
 #ifdef CONFIG_SENSORS_LPS331
 static struct i2c_gpio_platform_data i2c11_platdata = {
 	.sda_pin	= GPIO_BSENSE_SDA_18V,
-	.scl_pin	= GPIO_BENSE_SCL_18V,
+	.scl_pin	= GPIO_BSENSE_SCL_18V,
 	.udelay	= 2, /* 250KHz */
 	.sda_is_open_drain	= 0,
 	.scl_is_open_drain	= 0,
@@ -1856,6 +1959,9 @@ static struct platform_device *midas_devices[] __initdata = {
 #endif
 	/* &s3c_device_i2c9, */
 #ifdef CONFIG_SENSORS_AK8975C
+	&s3c_device_i2c10,
+#endif
+#ifdef CONFIG_SENSORS_AK8963C
 	&s3c_device_i2c10,
 #endif
 #ifdef CONFIG_SENSORS_LPS331
@@ -2056,8 +2162,8 @@ static struct platform_device *midas_devices[] __initdata = {
 /* below temperature base on the celcius degree */
 struct s5p_platform_tmu midas_tmu_data __initdata = {
 	.ts = {
-		.stop_1st_throttle  = 78,
-		.start_1st_throttle = 80,
+		.stop_1st_throttle  = 77,
+		.start_1st_throttle = 82,
 		.stop_2nd_throttle  = 87,
 		.start_2nd_throttle = 103,
 		.start_tripping	    = 110, /* temp to do tripping */
@@ -2259,7 +2365,7 @@ static void __init exynos4_reserve_mem(void)
 #ifdef CONFIG_EXYNOS_C2C
 		"samsung-c2c=c2c_shdmem;"
 #endif
-		"s3cfb.0=fimd;exynos4-fb.0=fimd;samsung-pd.1=fimd;"
+		"s3cfb.0=fimd;exynos4-fb.0=fimd;"
 		"s3c-fimc.0=fimc0;s3c-fimc.1=fimc1;s3c-fimc.2=fimc2;s3c-fimc.3=fimc3;"
 		"exynos4210-fimc.0=fimc0;exynos4210-fimc.1=fimc1;exynos4210-fimc.2=fimc2;exynos4210-fimc.3=fimc3;"
 #ifdef CONFIG_ION_EXYNOS
@@ -2289,7 +2395,8 @@ static void __init exynos4_reserve_mem(void)
 		"s5p-smem/mfc=mfc-secure;"
 		"s5p-smem/fimc=ion;"
 		"s5p-smem/mfc-shm=mfc-normal;"
-		"s5p-smem/fimd=fimd;";
+		"s5p-smem/fimd=fimd;"
+		"s5p-smem/fimc0=fimc0;";
 
 		s5p_cma_region_reserve(regions, regions_secure, 0, map);
 }
@@ -2769,11 +2876,13 @@ static void __init midas_machine_init(void)
 	__raw_writel((__raw_readl(EXYNOS4_CLKDIV_FSYS1) & 0xfff0fff0)
 		     | 0x80008, EXYNOS4_CLKDIV_FSYS1);
 
-#if defined(CONFIG_IR_REMOCON_GPIO)
 /* IR_LED */
+#if defined(CONFIG_IR_REMOCON_MC96)
+	irda_device_init();
+#elif defined(CONFIG_IR_REMOCON_GPIO)
 	ir_rc_init_hw();
-/* IR_LED */
 #endif
+/* IR_LED */
 }
 
 #ifdef CONFIG_EXYNOS_C2C
@@ -2799,7 +2908,7 @@ static void __init exynos_init_reserve(void)
 	sec_debug_magic_init();
 }
 
-MACHINE_START(SMDK4412, "SMDK4x12")
+MACHINE_START(SMDK4412, "smdk4x12")
 	.boot_params	= S5P_PA_SDRAM + 0x100,
 	.init_irq	= exynos4_init_irq,
 	.map_io		= midas_map_io,
@@ -2811,7 +2920,7 @@ MACHINE_START(SMDK4412, "SMDK4x12")
 	.init_early	= &exynos_init_reserve,
 MACHINE_END
 
-MACHINE_START(SMDK4212, "SMDK4x12")
+MACHINE_START(SMDK4212, "smdk4x12")
 	.boot_params	= S5P_PA_SDRAM + 0x100,
 	.init_irq	= exynos4_init_irq,
 	.map_io		= midas_map_io,
